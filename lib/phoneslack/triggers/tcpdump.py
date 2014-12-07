@@ -154,8 +154,8 @@ class TcpFilter(Thread):
 				length = udph[2]
 				checksum = udph[3]
 
-			if( self.valid_packet(s_addr, d_addr, source_port, dest_port, self.broadcast, self.gateway) ):
-				self.processCall( datetime.datetime.now(), s_addr, d_addr )
+				if( self.valid_packet(s_addr, d_addr, source_port, dest_port, self.broadcast, self.gateway) ):
+					self.processCall( datetime.datetime.now(), s_addr, d_addr )
 
 		self.hasCallEnded( datetime.datetime.now() )
 
