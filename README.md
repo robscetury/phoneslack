@@ -39,31 +39,49 @@ What it doesn't do:
 This is super simple and whipped together quickly.  I expect to improve:
 
 1) I'd like to get meta data, but sadly my mitel phone uses encryption
+
 2) Like to support additional phones and sip
+
 3) Like to support other forms of communication... Mozilla's hello, hangouts, etc.
+
 4) If when I get a smart watch, I'll probably do some integration there as well.
+
 5) Improve the architecture.
 
 Rough Instructions:
 
 You will need a:
+
 Raspberry Pi B/B+ model (I used B+)
+
 A Rasp compatible Wifi Dongle
+
 A Rasp Compatible USB Ethernet Adapter
+
 A Rasp Case
+
 An SD Card
 
 For setup you'll need a keyboard and monitor
+
 0) Assemble the pi.
+
 1) Install Raspbian ( http://raspbian.org )
+
 2) Install tcpdump/libpcap
+
 3) Install python and python-dev
+
 4) Configure your wifi dongle (this is what will connect to slack), the other Ethernet plugs will run the network tap.
+
 5) Put the raspberry pi inline with your sip phone, connecting eth0 to your router and eth1 to your phone. (Reverse will work too.):
     router ------- rasppi ------ phone
     [ Dig the fancy ascii art. :) ]
+
 6) I *think* after that all you'll need to do is "sudo python seutp.py install"
+
 7) Modify /etc/sniffer/sniff.conf and fill in values in {}  (except hostname if that is what you want the slack bot to be called...)
+
 8)  run "sudo update-rc.d sniffer defaults" and then restart the pi.
 
 9) Optional: On the windows box you are using (if you are), copy the "client" directory and in a console run python.exe setup.py py2exe, this will generate an executable you can put in your startup folder to enable the Skype/vidyo watcher.  (Copy .watcher.cfg to your home directory and modify as needed.)
