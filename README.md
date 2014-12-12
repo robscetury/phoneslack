@@ -28,6 +28,8 @@ They also run the minet using what could be SSL encryption over TCP 6800 for con
 
 2b) In the client sub directory, there is a watcher that will monitor Skype and vidyo (another application we use).  When Skype (or vidyo) calls, the watcher will post a message to the phoneslack server running on the pi. (You'll need to provide a configuration on the windows box for this to work.)   When using Skype, metadata is provided about the call.
 
+In this mode, the phoneslack server must be configured to run with the webserver plugin.  Please not that currently there is NO SECURITY on these messages.  The webserer will accept messages from anyone and try to post them.  And the messages are sent in plain text. I'll probably fix that at some point, but for now its something you should think about before using in this mode.
+
 What it doesn't do:
 	1) Work with anything other than mitel phones
 	2) capture the meta data
