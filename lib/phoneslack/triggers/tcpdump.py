@@ -54,14 +54,16 @@ class TcpFilter(Thread):
 		except:
 			self.filter = None
 		try:
-			phonemap = cf.get("phonemap")
+			phonemap = cf.get("SlackPhone", "phonemap")
 		except:
 			phonemap = None
 
 		try:
 			self.phonemap = json.loads( phonemap )
-		except:
+		except Exception, e:
+			logging.exception(e)
 			self.phonemap = {}
+		logging.info( str( self.phonemap) )
 		self.hostname = cf.get("SlackPhone", "slackbotname")	
 		self.DATE_FORMAT=cf.get("SlackPhone", "dateformat")
                 if self.hostname=="{hostname}":
@@ -71,10 +73,9 @@ class TcpFilter(Thread):
 		self.inCall = False
 		self.lastPacket = None
 		self.packetCount = 0
-		
+		self.openCalls = dict()		
 
 	def processCall( self, dt , source, dest, source_mac="", dest_mac=""):
-
 		if not self.inCall:			
 			self.packetCount += 1
 			self.lastPacket = dt
@@ -84,7 +85,8 @@ class TcpFilter(Thread):
 				if username:
 					logging.warn( "Call Started %s"%dt)
 					self.inCall = True
-				
+					if self.getLocalMac( source_mac, dest_mac) != -1:
+						self.openCalls[self.getLocalMac( source_mac, dest_mac) ] = dt
 					self.eventQueue.put( dict( msg="%(dt)s: %(user)s on the phone.",
 								   user=username,
 								   hostname = self.hostname, 
@@ -93,9 +95,20 @@ class TcpFilter(Thread):
 					logging.debug( "packet from %s to %s, packecount is %s"%(source, dest, self.packetCount))
 		elif self.inCall:
 			self.lastPacket = dt
+			if( self.getLocalMac( source_mac, dest_mac) != -1):
+				self.openCalls[ self.getLocalMac( source_mac, dest_mac)] = dt
 
-
+	def getLocalMac( self, source, dest):
+		#logging.info("source = %s, dest=%s"%(source, dest) )
+		if not self.phonemap:
+			return -1
+		elif source in self.phonemap:
+			return source
+		elif dest in self.phonemap:
+			return dest
+		
 	def mapPhone( self, source, dest):
+		logging.info( "source mac %s, dest %s"%(source, dest))
 		if not self.phonemap:
 			return self.hostname
 		elif source in self.phonemap:
@@ -106,26 +119,37 @@ class TcpFilter(Thread):
 	def hasCallEnded( self, dt, source_mac="", dest_mac=""):
 		#if self.inCall and self.lastPacket:
 		#
-		if self.inCall and ( dt - self.lastPacket) > datetime.timedelta(seconds=1.5):
-			username = self.mapPhone( source_mac, dest_mac)
-			logging.info("ending call for %s"%username)
-			if username:
-				self.eventQueue.put( dict( msg=	"%(dt)s: %(user)s off the phone",
-							   user=username,
-							   hostname=self.hostname,
-							   dt = dt.strftime( self.DATE_FORMAT)) )
-				logging.warn( "Call Ended %s"%dt)
-			self.inCall = False
-			self.lastPacket = None 
-			self.packetCount =0
-		elif self.lastPacket:
-			logging.info( "time diff %s"%(dt - self.lastPacket).seconds)
+		if self.getLocalMac( source_mac, dest_mac) == -1 and self.inCall and ( dt - self.lastPacket) > datetime.timedelta(seconds=1.5):
+			self.endCall( dt, source_mac, dest_mac)
+		elif self.inCall:
+			for k in self.openCalls:				
+				if (dt-self.openCalls[k]) > datetime.timedelta( seconds=1.5):
+					self.endCall( dt, k, dest_mac )
+		
+	def endCall( self, dt, source_mac, dest_mac):		
+		username = self.mapPhone( source_mac, dest_mac)
+		logging.info("ending call for %s"%username)
+		if username:
+			self.eventQueue.put( dict( msg=	"%(dt)s: %(user)s off the phone",
+						   user=username,
+						   hostname=self.hostname,
+						   dt = dt.strftime( self.DATE_FORMAT)) )
+			logging.warn( "Call Ended %s"%dt)
+		self.inCall = len(self.openCalls) == 0
+		self.lastPacket = None 
+		self.packetCount =0
+		#elif self.lastPacket:
+		#	logging.info( "time diff %s"%(dt - self.lastPacket).seconds)
+	def mac_string(self, s):
+		return "%.2x:%.2x:%.2x:%.2x:%.2x:%.2x"%( ord(s[0]), ord(s[1]), ord(s[2]), ord(s[3]), ord(s[4]), ord(s[5]) )
 
 	def parse_packet( self, header, packet):
 		eth_length = 14
 		eth_header= packet[:eth_length]
 		eth = unpack("!6s6sH", eth_header)
 		eth_protocol = socket.ntohs(eth[2])
+		dest_mac = self.mac_string(packet[0:6])
+		source_mac = self.mac_string(packet[6:12])
 		
 		if eth_protocol == 8:
 			ip_header = packet[eth_length:20+eth_length]
@@ -133,7 +157,6 @@ class TcpFilter(Thread):
 			version_ihl = iph[0]
 			version = version_ihl >> 4
 			ihl = version_ihl & 0xF
-			
 			iph_length = ihl * 4
 			
 			ttl = iph[5]
@@ -155,9 +178,9 @@ class TcpFilter(Thread):
 				checksum = udph[3]
 
 				if( self.valid_packet(s_addr, d_addr, source_port, dest_port, self.broadcast, self.gateway) ):
-					self.processCall( datetime.datetime.now(), s_addr, d_addr )
+					self.processCall( datetime.datetime.now(), s_addr, d_addr , source_mac, dest_mac)
 
-		self.hasCallEnded( datetime.datetime.now() )
+		self.hasCallEnded( datetime.datetime.now() , source_mac, dest_mac )
 
 	def monitortcp(self):
 		if self.device not in self.devices and self.startDev!="":
